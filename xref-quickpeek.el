@@ -10,6 +10,7 @@
   buffer
   end-pos
   line
+  nlines
   definition)
 
 (defun source-peek--xref--get-location (xref)
@@ -81,6 +82,11 @@
       (end-of-defun)
       (point))))
 
+(defun source-peek--get-nlines (location)
+  (with-current-buffer (source-peek-location-buffer location)
+    (count-lines (source-peek-location-start-pos location)
+                 (source-peek-location-end-pos location))))
+
 (defun source-peek-fill-location (location)
   (unless (source-peek-location-buffer location)
     (setf (source-peek-location-buffer location)
@@ -94,38 +100,97 @@
   (unless (source-peek-location-definition location)
     (setf (source-peek-location-definition location)
           (source-peek--extract-definition location)))
+  (unless (source-peek-location-line location)
+    (setf (source-peek-location-line location)
+          (source-peek--get-line-number location)))
+  (unless (source-peek-location-nlines location)
+    (setf (source-peek-location-nlines location)
+          (source-peek--get-nlines location)))
   location)
 
-(defun source-peek--truncate-definition (location &optional lines)
-  (with-temp-buffer
-    (insert (source-peek-location-definition location))
-    (quick-peek--truncate-buffer 0 (or lines 10))
-    (buffer-string)))
+(cl-defstruct source-peek-popup
+  pos
+  scroll-start
+  height
+  current-location
+  locations)
 
+(defvar-local source-peek-popup nil)
 
-(defun source-peek-cleanup ()
-  (quick-peek-hide)
-  (remove-hook 'post-command-hook #'source-peek-cleanup))
+(defun source-peek--truncate-definition (location &optional start-at lines ellipsis)
+  (let ((start-at (or start-at 1))
+        (lines (or lines 10))
+        (ellipsis (or ellipsis " …")))
+    (with-temp-buffer
+      (insert (source-peek-location-definition location))
+      (goto-char (point-min))
+      (forward-line (1- (min start-at
+                             (max (1+ (- (count-lines (point-min) (point-max)) lines)) 1))))
+      (delete-region (point-min) (point))
+      (forward-line lines)
+      (unless (eobp)
+        (delete-region (point) (point-max))
+        (forward-line -1)
+        (goto-char (point-at-eol))
+        (insert ellipsis))
+      (buffer-string))))
 
 (defun source-peek-display-locations (locations)
+  (setq source-peek-popup (make-source-peek-popup :pos (copy-marker (line-beginning-position))
+                                                  :scroll-start 1
+                                                  :height 10
+                                                  :current-location (car locations)
+                                                  :locations locations))
   (quick-peek-show (with-temp-buffer
-                     (dolist (location locations)
+                     (let ((location (car locations)))
                        (insert (propertize (format "\n%s:%d"
                                                    (source-peek-location-file location)
                                                    (source-peek-location-line location))
                                            'face 'link
                                            'location location))
                        (insert "\n\n")
-                       (insert (source-peek--truncate-definition location
-                                                                 (when (> (length locations) 1)
-                                                                   5))))
+                       (insert (source-peek--truncate-definition location)))
                      (buffer-string))
                    (line-beginning-position)
                    'none
                    'none)
-  (run-at-time 0 nil
-               (lambda ()
-                 (add-hook 'post-command-hook #'source-peek-cleanup))))
+  (set-transient-map source-peek-keymap #'source-peek-keep-keymap-p))
+
+(defun source-peek--get-scroll-start (popup amount)
+  (let* ((current-start (source-peek-popup-scroll-start popup))
+         (location (source-peek-popup-location popup))
+         (new-start (if (< (+ current-start amount) 0)
+                        0
+                      (+ current-start amount)))
+         (start-max (max (1+ (- (source-peek-location-nlines location)
+                                (source-peek-popup-height popup)))
+                         1)))
+    (min new-start start-max )))
+
+(defun source-peek-scroll-up ()
+  (interactive)
+  (source-peek-scroll -1))
+
+(defun source-peek-scroll-down ()
+  (interactive)
+  (source-peek-scroll +1))
+
+(defun source-peek-quit ()
+  (interactive)
+  (when source-peek-popup
+    (quick-peek-hide (source-peek-popup-pos source-peek-popup))
+    (setq source-peek-popup nil)))
+
+(defun source-peek-keep-keymap-p ()
+  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
+
+(defvar source-peek-keymap
+  (let ((map (make-keymap)))
+    (define-key map [t] #'source-peek-quit)
+    (define-key map (kbd "<down>") #'source-peek-scroll-down)
+    (define-key map (kbd "<up>") #'source-peek-scroll-up)
+    map)
+  "Keymap used in `source-peek-keymap'.")
 
 (defun source-peek ()
   (interactive)
