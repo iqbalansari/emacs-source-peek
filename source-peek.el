@@ -1,3 +1,165 @@
+;;; source-peek.el --- Display function definitions inline  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2017  Iqbal Ansari
+
+;; Author: Iqbal Ansari <iqbalansari02@yahoo.com>
+;; Keywords: convenience, extensions, help, tools
+;; Version: 0.4
+;; Package-Requires: ((quick-peek "1.0") (seq "1.11") (emacs "24.3"))
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; This package adds the command `source-peek' which fetches the definition of
+;; the function at point (using different backends) and displays them inline in
+;; the current buffer.
+;;
+;; It allows limited interaction with the source definition, currently limited
+;; to only scrolling them
+
+
+
+;;; Code:
+
+(require 'quick-peek)
+(require 'seq)
+
+;; Optional dependencies
+
+(require 'xref nil :noerror)
+
+
+
+(cl-defstruct source-peek-location
+  "Location of source definition."
+  file
+  start-pos
+  buffer
+  end-pos
+  line
+  nlines
+  definition)
+
+
+
+;;; Backends for fetching definitions
+
+(defun source-peek--xref--get-location (xref)
+  (message "Fetching definition ...")
+  (let ((inhibit-message t)
+        (display-buffer-alist (list (cons ".*" #'ignore))))
+    (save-excursion
+      (let ((marker (xref-location-marker (xref-item-location xref))))
+        (with-current-buffer (marker-buffer marker)
+          (save-excursion
+            (goto-char marker)
+            (prog1 (make-source-peek-location :buffer (current-buffer)
+                                               :file (buffer-file-name)
+                                               :start-pos (point))
+                    (message nil))))))))
+
+(defun source-peek-xref-get-locations (&optional identifier)
+  (let* ((backend (or (xref-find-backend)
+                      (user-error "No xref backend found for current buffer")))
+         (identifier (or identifier
+                         (xref-backend-identifier-at-point backend)
+                         (user-error "No identifier found at current point")))
+         (xrefs (xref-backend-definitions backend identifier)))
+    (mapcar #'source-peek--xref--get-location xrefs)))
+
+(defvar source-peek-backends
+  '(((featurep 'xref) . source-peek-xref-get-locations)))
+
+
+
+;; Fetching definitions
+
+(defvar-local source-peek--backend 'unknown)
+
+(defun source-peek--get-backend ()
+  (when (equal source-peek--backend 'unknown)
+    (setq source-peek--backend
+          (cdr (seq-find (lambda (backend)
+                           (or (and (consp (car backend))
+                                    (eval (car backend)))
+                               (equal (car backend) t)))
+                         source-peek-backends))))
+  source-peek--backend)
+
+(defun source-peek-fetch-locations (&optional identifier)
+  (let ((backend (or (source-peek--get-backend)
+                     (user-error "Could not find a backend for current buffer"))))
+    (funcall backend identifier)))
+
+(defun source-peek--open-buffer (location)
+  (when (source-peek-location-file location)
+    (find-file-noselect (source-peek-location-file location) t)))
+
+(defun source-peek--extract-definition (location)
+  (with-current-buffer (source-peek-location-buffer location)
+    (let* ((start (source-peek-location-start-pos location))
+           (end (source-peek-location-end-pos location)))
+      (save-excursion
+        (save-restriction
+          (narrow-to-region start end)
+          (font-lock-fontify-region start end)
+          (buffer-string))))))
+
+(defun source-peek--get-line-number (location)
+  (with-current-buffer (source-peek-location-buffer location)
+    (save-excursion
+      (goto-char (source-peek-location-start-pos location))
+      (line-number-at-pos))))
+
+(defun source-peek--get-end-pos (location)
+  (with-current-buffer (source-peek-location-buffer location)
+    (save-excursion
+      (goto-char (source-peek-location-start-pos location))
+      (end-of-defun)
+      (point))))
+
+(defun source-peek--get-nlines (location)
+  (with-current-buffer (source-peek-location-buffer location)
+    (count-lines (source-peek-location-start-pos location)
+                 (source-peek-location-end-pos location))))
+
+(defun source-peek-fill-location (location)
+  (unless (source-peek-location-buffer location)
+    (setf (source-peek-location-buffer location)
+          (source-peek--open-buffer location)))
+  (unless (source-peek-location-line location)
+    (setf (source-peek-location-line location)
+          (source-peek--get-line-number location)))
+  (unless (source-peek-location-end-pos location)
+    (setf (source-peek-location-end-pos location)
+          (source-peek--get-end-pos location)))
+  (unless (source-peek-location-definition location)
+    (setf (source-peek-location-definition location)
+          (source-peek--extract-definition location)))
+  (unless (source-peek-location-line location)
+    (setf (source-peek-location-line location)
+          (source-peek--get-line-number location)))
+  (unless (source-peek-location-nlines location)
+    (setf (source-peek-location-nlines location)
+          (source-peek--get-nlines location)))
+  location)
+
+
+
+;; Popup displays
+
 (cl-defstruct source-peek-popup
   (scroll-start 1)
   (height 10)
@@ -126,7 +288,7 @@
     (setq source-peek-popups nil)))
 
 (defun source-peek-keep-keymap-p ()
-  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
+  (member this-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
 
 (defvar source-peek-keymap
   (let ((map (make-keymap)))
@@ -143,3 +305,18 @@
          (popups (source-peek-create-popups position locations)))
     (setq source-peek-popups popups)
     (source-peek-render-popup popups)))
+
+
+
+;; User interface
+
+;;;###autoload
+(defun source-peek ()
+  (interactive)
+  (source-peek-display-locations (mapcar #'source-peek-fill-location
+					 (source-peek-fetch-locations))))
+
+
+
+(provide 'source-peek)
+;;; source-peek.el ends here
