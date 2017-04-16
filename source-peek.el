@@ -70,14 +70,14 @@
                                                :start-pos (point))
                     (message nil))))))))
 
-(defun source-peek-xref-get-locations (&optional identifier)
+(defun source-peek-xref-get-locations (callback &optional identifier)
   (let* ((backend (or (xref-find-backend)
                       (user-error "No xref backend found for current buffer")))
          (identifier (or identifier
                          (xref-backend-identifier-at-point backend)
                          (user-error "No identifier found at current point")))
          (xrefs (xref-backend-definitions backend identifier)))
-    (mapcar #'source-peek--xref--get-location xrefs)))
+    (funcall callback (mapcar #'source-peek--xref--get-location xrefs))))
 
 (defvar source-peek-backends
   '(((featurep 'xref) . source-peek-xref-get-locations)))
@@ -98,10 +98,14 @@
                          source-peek-backends))))
   source-peek--backend)
 
-(defun source-peek-fetch-locations (&optional identifier)
+(defun source-peek-fetch-locations (callback &optional identifier)
   (let ((backend (or (source-peek--get-backend)
                      (user-error "Could not find a backend for current buffer"))))
-    (funcall backend identifier)))
+    (funcall backend
+             ;; Always to invoke callback asynchronously even for async source
+             (lambda (locations)
+               (run-at-time 0 nil callback locations))
+             identifier)))
 
 (defun source-peek--open-buffer (location)
   (when (source-peek-location-file location)
@@ -313,8 +317,9 @@
 ;;;###autoload
 (defun source-peek ()
   (interactive)
-  (source-peek-display-locations (mapcar #'source-peek-fill-location
-					 (source-peek-fetch-locations))))
+  (source-peek-fetch-locations (lambda (locations)
+                                 (source-peek-display-locations (mapcar #'source-peek-fill-location
+                                                                        locations)))))
 
 
 
