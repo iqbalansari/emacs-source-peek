@@ -403,9 +403,12 @@
 ;;;###autoload
 (defun source-peek ()
   (interactive)
-  (source-peek-fetch-locations (lambda (locations)
-                                 (source-peek-display-locations (mapcar #'source-peek-fill-location
-                                                                        locations)))))
+  (source-peek-fetch-locations
+   (lambda (locations)
+     (if locations
+         (source-peek-display-locations (mapcar #'source-peek-fill-location
+                                                locations))
+       (message "[source-peek] Could not find any definitions or symbol at point!")))))
 
 
 
