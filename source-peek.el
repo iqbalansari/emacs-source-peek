@@ -126,10 +126,50 @@
             (file . ,(tern-project-relative-file))
             (type . "definition")))))
 
+;; Dumb Jump backend
+
+(require 'dumb-jump nil :noerror)
+
+(defun source-peek-use-dump-jump-p ()
+  (when (and (featurep 'dumb-jump) buffer-file-name)
+    (member (or (dumb-jump-get-language-by-filename buffer-file-name)
+                (dumb-jump-get-language-from-mode))
+            (mapcar (lambda (rule)
+                      (plist-get rule :language))
+                    dumb-jump-find-rules))))
+
+(defun source-peek--dumb-jump--get-location (location)
+  (message "Fetching definition ...")
+  (let* ((inhibit-message t)
+         (display-buffer-alist (list (cons ".*" #'ignore)))
+         (file (plist-get location :path))
+         (line (plist-get location :line)))
+
+    (make-source-peek-location :file (expand-file-name file default-directory)
+                               :start-pos (with-temp-buffer
+                                            (insert-file-contents-literally file)
+                                            (goto-char (point-min))
+                                            (forward-line (1- line))
+                                            (point))
+                               :line line)))
+
+(defun source-peek-dumb-jump-get-locations (callback)
+  (let* ((results (dumb-jump-get-results))
+         (locations (sort (plist-get results :results)
+                          (lambda (x y)
+                            (< (plist-get x :diff)
+                               (plist-get y :diff)))))
+         (issue (plist-get results :issue)))
+    (funcall callback
+             (unless issue
+               (mapcar #'source-peek--dumb-jump--get-location
+                       locations)))))
+
 (defvar source-peek-backends
   '((jedi-mode . source-peek-jedi-get-locations)
     (tern-mode . source-peek-tern-get-locations)
-    ((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)))
+    ((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)
+    ((source-peek-use-dump-jump-p) . source-peek-dumb-jump-get-locations)))
 
 
 
