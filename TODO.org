@@ -1,0 +1,27 @@
+* Handle non-file definitions
+** Tern
+   Returns remote definitions (eg. angular)
+** Jedi
+   Matches for builtins
+
+* More backends (in no particular order)
+  - [X] Xref
+  - [X] Jedi
+  - [X] Tern
+  - [X] Dumb Jump
+  - [ ] Etags
+  - [ ] Gtags
+  - [ ] Ruby (Robe)
+  - [ ] Haskell (Intero)
+  - [ ] Go (Godef)
+  - [ ] Scala (Ensime)
+  - [ ] Rust (Racer)
+  - [ ] Erlang (EDTS)
+  - [ ] Factor (Fuel)
+  - [ ] Elixir (Alchemist)
+  - [ ] C/C++ (RTags)
+  - [ ] OCaml (Merlin)
+
+* Code cleanup
+* Documentation
+* Tests
