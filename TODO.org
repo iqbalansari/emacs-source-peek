@@ -3,6 +3,10 @@
    Returns remote definitions (eg. angular)
 ** Jedi
    Matches for builtins
+* User interface
+** Fontify definition count
+** Make links to file in popups work
+** Allowing jumping to currently displayed definition
 
 * More backends (in no particular order)
   - [X] Xref
