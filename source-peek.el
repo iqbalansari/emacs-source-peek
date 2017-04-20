@@ -79,7 +79,7 @@
     (funcall callback (mapcar #'source-peek--xref--get-location xrefs))))
 
 (defvar source-peek-backends
-  '(((featurep 'xref) . source-peek-xref-get-locations)))
+  '(((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)))
 
 
 
