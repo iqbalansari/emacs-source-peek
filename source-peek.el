@@ -103,8 +103,32 @@
     (lambda (reply)
       (funcall callback (mapcar #'source-peek--jedi--get-location reply)))))
 
+;; Tern backend
+
+(require 'tern nil :noerror)
+
+(defun source-peek--tern-get-location (result)
+  (let* ((rel-file-name (cdr (assoc 'file result)))
+         (abs-file-name (expand-file-name rel-file-name (tern-project-dir)))
+         (start-pos (cdr (assoc 'start result))))
+    (make-source-peek-location :file abs-file-name
+                               :start-pos (with-temp-buffer
+                                            (insert-file-contents-literally abs-file-name)
+                                            (goto-char start-pos)
+                                            (line-beginning-position)))))
+
+(defun source-peek-tern-get-locations (callback)
+  (tern-run-request
+   (lambda (err data)
+     (funcall callback (unless err
+                         (list (source-peek--tern-get-location data)))))
+   `((query (end . ,(point))
+            (file . ,(tern-project-relative-file))
+            (type . "definition")))))
+
 (defvar source-peek-backends
   '((jedi-mode . source-peek-jedi-get-locations)
+    (tern-mode . source-peek-tern-get-locations)
     ((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)))
 
 
