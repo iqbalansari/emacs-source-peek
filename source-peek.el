@@ -78,8 +78,34 @@
          (xrefs (xref-backend-definitions backend identifier)))
     (funcall callback (mapcar #'source-peek--xref--get-location xrefs))))
 
+;; Jedi backend
+
+(require 'deferred nil :noerror)
+(require 'jedi nil :noerror)
+
+(defun source-peek--jedi--get-location (location)
+  (message "Fetching definition ...")
+  (let ((inhibit-message t)
+        (display-buffer-alist (list (cons ".*" #'ignore)))
+        (file (plist-get location :module_path))
+        (line (plist-get location :line_nr)))
+
+    (make-source-peek-location :file file
+                               :start-pos (with-temp-buffer
+                                            (insert-file-contents-literally file)
+                                            (goto-char (point-min))
+                                            (forward-line (1- line))
+                                            (point))
+                               :line line)))
+
+(defun source-peek-jedi-get-locations (callback)
+  (deferred:nextc (jedi:call-deferred 'get_definition)
+    (lambda (reply)
+      (funcall callback (mapcar #'source-peek--jedi--get-location reply)))))
+
 (defvar source-peek-backends
-  '(((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)))
+  '((jedi-mode . source-peek-jedi-get-locations)
+    ((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)))
 
 
 
