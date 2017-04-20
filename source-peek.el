@@ -91,9 +91,7 @@
   (when (equal source-peek--backend 'unknown)
     (setq source-peek--backend
           (cdr (seq-find (lambda (backend)
-                           (or (and (consp (car backend))
-                                    (eval (car backend)))
-                               (equal (car backend) t)))
+                           (ignore-errors (eval (car backend))))
                          source-peek-backends))))
   source-peek--backend)
 
