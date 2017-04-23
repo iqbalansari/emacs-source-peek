@@ -35,6 +35,7 @@
 
 (require 'quick-peek)
 (require 'seq)
+(require 'compile)
 
 
 
@@ -324,7 +325,8 @@ about to be displayed and the total number of popups respectively."
     (with-temp-buffer
       (insert popup-contents)
       (goto-char (point-min))
-      (insert (format "[%d/%d]\n" selected-pop n-popups))
+      (insert (propertize (format "[%d/%d]\n" selected-pop n-popups)
+                          'face 'compilation-line-number))
       (buffer-string))))
 
 (defun source-peek-render-popup (popup-root)
