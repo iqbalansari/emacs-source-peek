@@ -269,17 +269,22 @@
     (make-source-peek-popup-root :position position
                              :popups popups)))
 
-(defun source-peek--truncate-definition (location &optional start-at lines ellipsis)
-  (let ((start-at (or start-at 1))
-        (lines (or lines 10))
+(defun source-peek--truncate-definition (location &optional start-line n-lines ellipsis)
+  "Return a truncated version of `defintion' slot of LOCATION.
+
+The returned text starts at the START-LINE in the definition and contains upto
+N-LINES number of lines.  ELLIPSIS is added at the end of the definition was
+truncated."
+  (let ((start-line (or start-line 1))
+        (n-lines (or n-lines 10))
         (ellipsis (or ellipsis " …")))
     (with-temp-buffer
       (insert (source-peek-location-definition location))
       (goto-char (point-min))
-      (forward-line (1- (min start-at
-                             (max (1+ (- (count-lines (point-min) (point-max)) lines)) 1))))
+      (forward-line (1- (min start-line
+                             (max (1+ (- (count-lines (point-min) (point-max)) n-lines)) 1))))
       (delete-region (point-min) (point))
-      (forward-line lines)
+      (forward-line n-lines)
       (unless (eobp)
         (delete-region (point) (point-max))
         (forward-line -1)
@@ -308,7 +313,12 @@ to the HEIGHT.  ELLIPSIS is added at end of the text to indicate truncation."
                                                 height ellipsis))
       (buffer-string))))
 
-(defun source-peek--add-popup-number (popup-contents selected-pop n-popups)
+(defun source-peek--add-header (popup-contents selected-pop n-popups)
+  "Add the a header displaying the number of definition being displayed.
+
+POPUP-CONTENTS is the raw contents that are about to be displayed, it is
+prepended with the header.  SELECTED-POP and N-POPUPS are position of the popup
+about to be displayed and the total number of popups respectively."
   (if  (= 1 n-popups)
       popup-contents
     (with-temp-buffer
@@ -326,7 +336,7 @@ POPUP-ROOT should be an instance of `source-peek-popup-root'."
          (height (source-peek-popup-root-height popup-root))
          (popup-contents (source-peek--popup-contents (nth current-popup popups) height))
          (n-popups (length popups)))
-    (quick-peek-show (source-peek--add-popup-number popup-contents
+    (quick-peek-show (source-peek--add-header popup-contents
                                                     (1+ current-popup)
                                                     n-popups)
                      (source-peek-popup-root-position popup-root)
