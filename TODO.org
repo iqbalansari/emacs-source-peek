@@ -4,9 +4,18 @@
 ** Jedi
    Matches for builtins
 * User interface
-** Fontify definition count
+** DONE Fontify definition count
+   CLOSED: [2017-04-24 Mon 03:46]
+   :LOGBOOK:
+   - State "DONE"       from "READ"       [2017-04-24 Mon 03:46]
+   - State "READ"       from              [2017-04-24 Mon 03:46]
+   :END:
+** DONE Allowing jumping to currently displayed definition
+   CLOSED: [2017-04-24 Mon 03:46]
+   :LOGBOOK:
+   - State "DONE"       from              [2017-04-24 Mon 03:46]
+   :END:
 ** Make links to file in popups work
-** Allowing jumping to currently displayed definition
 
 * More backends (in no particular order)
   - [X] Xref
