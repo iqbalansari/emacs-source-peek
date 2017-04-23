@@ -49,6 +49,11 @@
   nlines
   definition)
 
+(defun source-peek-jump-to-location (location)
+  "Jump the LOCATION."
+  (find-file (source-peek-location-file location))
+  (goto-char (source-peek-location-start-pos location)))
+
 
 
 ;;; Backends for fetching definitions
@@ -272,7 +277,31 @@
                           (make-source-peek-popup :location location))
                         locations)))
     (make-source-peek-popup-root :position position
-                             :popups popups)))
+                                 :popups popups)))
+
+(defun source-peek--current-popup (popup-root)
+  (let ((popup-index (source-peek-popup-root-current-popup popup-root)))
+    (nth popup-index (source-peek-popup-root-popups popup-root))))
+
+(defun source-peek-destroy ()
+  "Hide the display source peek popup."
+  (when source-peek-popup-root
+    (quick-peek-hide (source-peek-popup-root-position source-peek-popup-root))
+    (setq source-peek-popup-root nil)))
+
+(defun source-peek-jump-to-definition (&rest ignored)
+  "Jump the definition currently being displayed."
+  (interactive)
+  (when source-peek-popup-root
+    (let* ((current-popup (source-peek--current-popup source-peek-popup-root))
+           (location (source-peek-popup-location current-popup)))
+      (source-peek-jump-to-location location))))
+
+(defvar source-peek-mouse-map (let ((map (make-sparse-keymap)))
+                                (define-key map [mouse-1] #'source-peek-jump-to-definition)
+                                (define-key map [down-mouse-1] #'source-peek-jump-to-definition)
+                                (define-key map [drag-mouse-1] #'source-peek-jump-to-definition)
+                                map))
 
 (defun source-peek--truncate-definition (location &optional start-line n-lines ellipsis)
   "Return a truncated version of `defintion' slot of LOCATION.
@@ -312,6 +341,8 @@ to the HEIGHT.  ELLIPSIS is added at end of the text to indicate truncation."
                                   (source-peek-location-file location)
                                   (source-peek-location-line location))
                           'face 'link
+                          'pointer 'hand
+                          'keymap source-peek-mouse-map
                           'location location))
       (insert "\n\n")
       (insert (source-peek--truncate-definition location scroll-start
@@ -333,6 +364,11 @@ about to be displayed and the total number of popups respectively."
                           'face 'compilation-line-number))
       (buffer-string))))
 
+(defun source-peek-after-command ()
+  (unless (source-peek-persist-p)
+    (source-peek-destroy)
+    (remove-hook 'post-command-hook #'source-peek-after-command t)))
+
 (defun source-peek-render-popup (popup-root)
   "Display the POPUP-ROOT.
 
@@ -348,7 +384,8 @@ POPUP-ROOT should be an instance of `source-peek-popup-root'."
                      (source-peek-popup-root-position popup-root)
                      'none
                      'none)
-    (set-transient-map source-peek-keymap #'source-peek-keep-keymap-p)))
+    (set-transient-map source-peek-keymap #'source-peek-persist-p)
+    (add-hook 'post-command-hook #'source-peek-after-command t t)))
 
 (defun source-peek--calculate-scroll-start (popup amount height)
   "Calculate the new start position for POPUP after scrolling it by AMOUNT.
@@ -410,27 +447,25 @@ A negative value of AMOUNT means to select a previous definition."
   (interactive)
   (source-peek-cycle -1))
 
-(defun source-peek-quit ()
-  "Hide the display source peek popup."
-  (interactive)
-  (when source-peek-popup-root
-    (quick-peek-hide (source-peek-popup-root-position source-peek-popup-root))
-    (setq source-peek-popup-root nil)))
-
-(defun source-peek-keep-keymap-p ()
+(defun source-peek-persist-p ()
   "Return t if the transient keymap should stay active.
 
 More precisely return t, of the last command was one of source-peek commands"
-  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down recenter)))
+  (member this-command '(source-peek
+                         source-peek-scroll-up
+                         source-peek-scroll-down
+                         source-peek-cycle-next
+                         source-peek-cycle-previous
+                         recenter)))
 
 (defvar source-peek-keymap
   (let ((map (make-keymap)))
-    (define-key map [t] #'source-peek-quit)
     (define-key map (kbd "C-l") #'recenter)
     (define-key map (kbd "<left>") #'source-peek-cycle-previous)
     (define-key map (kbd "<right>") #'source-peek-cycle-next)
     (define-key map (kbd "<down>") #'source-peek-scroll-down)
     (define-key map (kbd "<up>") #'source-peek-scroll-up)
+    (define-key map (kbd "M-.") #'source-peek-jump-to-definition)
     map)
   "Keymap used in while the source-peek popup is being displayed.")
 
