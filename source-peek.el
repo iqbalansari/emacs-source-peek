@@ -252,21 +252,21 @@
 
 (cl-defstruct source-peek-popup
   (scroll-start 1)
-  (height 10)
   location)
 
-(cl-defstruct source-peek-popups
+(cl-defstruct source-peek-popup-root
   position
   popups
+  (height 10)
   (current-popup 0))
 
-(defvar-local source-peek-popups nil)
+(defvar-local source-peek-popup-root nil)
 
 (defun source-peek-create-popups (position locations)
   (let ((popups (mapcar (lambda (location)
                           (make-source-peek-popup :location location))
                         locations)))
-    (make-source-peek-popups :position position
+    (make-source-peek-popup-root :position position
                              :popups popups)))
 
 (defun source-peek--truncate-definition (location &optional start-at lines ellipsis)
@@ -287,10 +287,15 @@
         (insert ellipsis))
       (buffer-string))))
 
-(defun source-peek--popup-contents (popup &optional ellipsis)
+(defun source-peek--popup-contents (popup height &optional ellipsis)
+  "Return the contents for POPUP.
+
+POPUP should be an instance of `source-peek-popup'.  The contents are basically
+the source code at the location identified by the `location' slot of the POPUP.
+It truncated so that the total number of lines displayed are less than or equal
+to the HEIGHT.  ELLIPSIS is added at end of the text to indicate truncation."
   (let ((location (source-peek-popup-location popup))
         (scroll-start (source-peek-popup-scroll-start popup))
-        (height (source-peek-popup-height popup))
         (ellipsis (or ellipsis " …")))
     (with-temp-buffer
       (insert (propertize (format "\n%s:%d"
@@ -312,28 +317,34 @@
       (insert (format "[%d/%d]\n" selected-pop n-popups))
       (buffer-string))))
 
-(defun source-peek-render-popup (popup)
-  (let* ((popups (source-peek-popups-popups popup))
-         (n-popups (length popups))
-         (current-popup (source-peek-popups-current-popup popup))
-         (popup-contents (source-peek--popup-contents (nth current-popup popups))))
+(defun source-peek-render-popup (popup-root)
+  "Display the POPUP-ROOT.
+
+POPUP-ROOT should be an instance of `source-peek-popup-root'."
+  (let* ((popups (source-peek-popup-root-popups popup-root))
+         (current-popup (source-peek-popup-root-current-popup popup-root))
+         (height (source-peek-popup-root-height popup-root))
+         (popup-contents (source-peek--popup-contents (nth current-popup popups) height))
+         (n-popups (length popups)))
     (quick-peek-show (source-peek--add-popup-number popup-contents
                                                     (1+ current-popup)
                                                     n-popups)
-                     (source-peek-popups-position popup)
+                     (source-peek-popup-root-position popup-root)
                      'none
                      'none)
     (set-transient-map source-peek-keymap #'source-peek-keep-keymap-p)))
 
-(defun source-peek--calculate-scroll-start (popup amount)
-  "Calculate the new start position for POPUP after scrolling it by AMOUNT."
+(defun source-peek--calculate-scroll-start (popup amount height)
+  "Calculate the new start position for POPUP after scrolling it by AMOUNT.
+
+The start is calculated so that at-least HEIGHT number of lines are visible,
+unless the number of lines available for given location are less than HEIGHT."
   (let* ((current-start (source-peek-popup-scroll-start popup))
          (location (source-peek-popup-location popup))
          (new-start (+ current-start amount))
          ;; The new start cannot be less than difference between the total
          ;; number of lines for current definition and
-         (start-max (1+ (- (source-peek-location-nlines location)
-                           (source-peek-popup-height popup)))))
+         (start-max (1+ (- (source-peek-location-nlines location) height))))
     ;; If scroll start goes below 1 stop at 1
     (max (min new-start start-max) 1)))
 
@@ -341,26 +352,27 @@
   "Scroll the currently visible popup by AMOUNT.
 
 A negative value of AMOUNT causes the popup to scroll up."
-  (when source-peek-popups
-    (let* ((popups source-peek-popups)
-           (current-popup (nth (source-peek-popups-current-popup popups)
-                               (source-peek-popups-popups popups)))
+  (when source-peek-popup-root
+    (let* ((popup-root source-peek-popup-root)
+           (height (source-peek-popup-root-height popup-root))
+           (current-popup (nth (source-peek-popup-root-current-popup popup-root)
+                               (source-peek-popup-root-popups popup-root)))
            (amount (or amount 1)))
 
       (setf (source-peek-popup-scroll-start current-popup)
-            (source-peek--calculate-scroll-start current-popup amount))
-      (source-peek-render-popup source-peek-popups))))
+            (source-peek--calculate-scroll-start current-popup amount height))
+      (source-peek-render-popup source-peek-popup-root))))
 
 (defun source-peek-cycle (&optional amount)
-  "Move to the AMOUNTth next definition (wrapping around if needed).
+  "Move to the popup displaying AMOUNTth next definition.
 
 A negative value of AMOUNT means to select a previous definition."
-  (when source-peek-popups
-    (let* ((n-popups (length (source-peek-popups-popups source-peek-popups)))
-           (current-pop (source-peek-popups-current-popup source-peek-popups)))
-      (setf (source-peek-popups-current-popup source-peek-popups)
+  (when source-peek-popup-root
+    (let* ((n-popups (length (source-peek-popup-root-popups source-peek-popup-root)))
+           (current-pop (source-peek-popup-root-current-popup source-peek-popup-root)))
+      (setf (source-peek-popup-root-current-popup source-peek-popup-root)
             (mod (+ current-pop amount) n-popups))
-      (source-peek-render-popup source-peek-popups))))
+      (source-peek-render-popup source-peek-popup-root))))
 
 (defun source-peek-scroll-up ()
   "Scroll up the currently displayed definitions."
@@ -385,9 +397,9 @@ A negative value of AMOUNT means to select a previous definition."
 (defun source-peek-quit ()
   "Hide the display source peek popup."
   (interactive)
-  (when source-peek-popups
-    (quick-peek-hide (source-peek-popups-position source-peek-popups))
-    (setq source-peek-popups nil)))
+  (when source-peek-popup-root
+    (quick-peek-hide (source-peek-popup-root-position source-peek-popup-root))
+    (setq source-peek-popup-root nil)))
 
 (defun source-peek-keep-keymap-p ()
   "Return t if the transient keymap should stay active.
@@ -412,7 +424,7 @@ The LOCATIONS are instances of the `source-peek-location' struct.  This function
 assumes that all the attributes of `source-peek-location' are available."
   (let* ((position (copy-marker (line-beginning-position)))
          (popups (source-peek-create-popups position locations)))
-    (setq source-peek-popups popups)
+    (setq source-peek-popup-root popups)
     (source-peek-render-popup popups)))
 
 
