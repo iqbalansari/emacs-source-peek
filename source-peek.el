@@ -99,7 +99,7 @@
                                :line line)))
 
 (defun source-peek-jedi-get-locations (callback)
-  (deferred:nextc (jedi:call-deferred 'get_definition)
+  (deferred:nextc (jedi:call-deferred 'goto)
     (lambda (reply)
       (funcall callback (mapcar #'source-peek--jedi--get-location reply)))))
 
