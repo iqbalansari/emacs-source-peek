@@ -200,8 +200,12 @@
 
 (defun source-peek--extract-definition (location)
   (with-current-buffer (source-peek-location-buffer location)
-    (let* ((start (source-peek-location-start-pos location))
-           (end (source-peek-location-end-pos location)))
+    (let* ((start (save-excursion
+                    (goto-char (source-peek-location-start-pos location))
+                    (line-beginning-position)))
+           (end (save-excursion
+                  (goto-char (source-peek-location-end-pos location))
+                  (line-beginning-position))))
       (save-excursion
         (save-restriction
           (narrow-to-region start end)
