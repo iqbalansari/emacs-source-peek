@@ -326,17 +326,21 @@
     (set-transient-map source-peek-keymap #'source-peek-keep-keymap-p)))
 
 (defun source-peek--calculate-scroll-start (popup amount)
+  "Calculate the new start position for POPUP after scrolling it by AMOUNT."
   (let* ((current-start (source-peek-popup-scroll-start popup))
          (location (source-peek-popup-location popup))
-         (new-start (if (< (+ current-start amount) 1)
-                        1
-                      (+ current-start amount)))
-         (start-max (max (1+ (- (source-peek-location-nlines location)
-                                (source-peek-popup-height popup)))
-                         1)))
-    (min new-start start-max)))
+         (new-start (+ current-start amount))
+         ;; The new start cannot be less than difference between the total
+         ;; number of lines for current definition and
+         (start-max (1+ (- (source-peek-location-nlines location)
+                           (source-peek-popup-height popup)))))
+    ;; If scroll start goes below 1 stop at 1
+    (max (min new-start start-max) 1)))
 
 (defun source-peek-scroll (&optional amount)
+  "Scroll the currently visible popup by AMOUNT.
+
+A negative value of AMOUNT causes the popup to scroll up."
   (when source-peek-popups
     (let* ((popups source-peek-popups)
            (current-popup (nth (source-peek-popups-current-popup popups)
@@ -348,6 +352,9 @@
       (source-peek-render-popup source-peek-popups))))
 
 (defun source-peek-cycle (&optional amount)
+  "Move to the AMOUNTth next definition (wrapping around if needed).
+
+A negative value of AMOUNT means to select a previous definition."
   (when source-peek-popups
     (let* ((n-popups (length (source-peek-popups-popups source-peek-popups)))
            (current-pop (source-peek-popups-current-popup source-peek-popups)))
@@ -356,29 +363,37 @@
       (source-peek-render-popup source-peek-popups))))
 
 (defun source-peek-scroll-up ()
+  "Scroll up the currently displayed definitions."
   (interactive)
   (source-peek-scroll -1))
 
 (defun source-peek-scroll-down ()
+  "Scroll down the currently displayed definitions."
   (interactive)
   (source-peek-scroll +1))
 
 (defun source-peek-cycle-next ()
+  "Display the next definition from current set of definitions."
   (interactive)
   (source-peek-cycle +1))
 
 (defun source-peek-cycle-previous ()
+  "Display the previous definition from current set of definitions."
   (interactive)
   (source-peek-cycle -1))
 
 (defun source-peek-quit ()
+  "Hide the display source peek popup."
   (interactive)
   (when source-peek-popups
     (quick-peek-hide (source-peek-popups-position source-peek-popups))
     (setq source-peek-popups nil)))
 
 (defun source-peek-keep-keymap-p ()
-  (member this-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
+  "Return t if the transient keymap should stay active.
+
+More precisely return t, of the last command was one of source-peek commands"
+  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
 
 (defvar source-peek-keymap
   (let ((map (make-keymap)))
@@ -388,9 +403,13 @@
     (define-key map (kbd "<down>") #'source-peek-scroll-down)
     (define-key map (kbd "<up>") #'source-peek-scroll-up)
     map)
-  "Keymap used in `source-peek-keymap'.")
+  "Keymap used in while the source-peek popup is being displayed.")
 
 (defun source-peek-display-locations (locations)
+  "Display the LOCATIONS in a popup.
+
+The LOCATIONS are instances of the `source-peek-location' struct.  This function
+assumes that all the attributes of `source-peek-location' are available."
   (let* ((position (copy-marker (line-beginning-position)))
          (popups (source-peek-create-popups position locations)))
     (setq source-peek-popups popups)
@@ -402,13 +421,14 @@
 
 ;;;###autoload
 (defun source-peek ()
+  "Fetch and display the definitions for symbol at point inline."
   (interactive)
   (source-peek-fetch-locations
    (lambda (locations)
      (if locations
          (source-peek-display-locations (mapcar #'source-peek-fill-location
                                                 locations))
-       (message "[source-peek] Could not find any definitions or symbol at point!")))))
+       (message "[source-peek] Could not find any definitions for symbol at point!")))))
 
 
 
