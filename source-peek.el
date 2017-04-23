@@ -408,8 +408,7 @@ A negative value of AMOUNT causes the popup to scroll up."
   (when source-peek-popup-root
     (let* ((popup-root source-peek-popup-root)
            (height (source-peek-popup-root-height popup-root))
-           (current-popup (nth (source-peek-popup-root-current-popup popup-root)
-                               (source-peek-popup-root-popups popup-root)))
+           (current-popup (source-peek--current-popup popup-root))
            (amount (or amount 1)))
 
       (setf (source-peek-popup-scroll-start current-popup)
@@ -422,9 +421,9 @@ A negative value of AMOUNT causes the popup to scroll up."
 A negative value of AMOUNT means to select a previous definition."
   (when source-peek-popup-root
     (let* ((n-popups (length (source-peek-popup-root-popups source-peek-popup-root)))
-           (current-pop (source-peek-popup-root-current-popup source-peek-popup-root)))
+           (current-popup (source-peek-popup-root-current-popup source-peek-popup-root)))
       (setf (source-peek-popup-root-current-popup source-peek-popup-root)
-            (mod (+ current-pop amount) n-popups))
+            (mod (+ current-popup amount) n-popups))
       (source-peek-render-popup source-peek-popup-root))))
 
 (defun source-peek-scroll-up ()
