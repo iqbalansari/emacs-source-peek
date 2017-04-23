@@ -417,11 +417,12 @@ A negative value of AMOUNT means to select a previous definition."
   "Return t if the transient keymap should stay active.
 
 More precisely return t, of the last command was one of source-peek commands"
-  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down)))
+  (member last-command '(source-peek source-peek-scroll-up source-peek-scroll-down recenter)))
 
 (defvar source-peek-keymap
   (let ((map (make-keymap)))
     (define-key map [t] #'source-peek-quit)
+    (define-key map (kbd "C-l") #'recenter)
     (define-key map (kbd "<left>") #'source-peek-cycle-previous)
     (define-key map (kbd "<right>") #'source-peek-cycle-next)
     (define-key map (kbd "<down>") #'source-peek-scroll-down)
