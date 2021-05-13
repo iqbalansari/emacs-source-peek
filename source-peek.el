@@ -84,6 +84,15 @@
          (xrefs (xref-backend-definitions backend identifier)))
     (funcall callback (mapcar #'source-peek--xref--get-location xrefs))))
 
+;; lsp-mode backend
+
+(require 'lsp-mode nil :noerror)
+
+(defun source-peek-lsp-get-locations (callback)
+  (let* ((loc (lsp-request "textDocument/definition" (append (lsp--text-document-position-params) nil)))
+         (xrefs (lsp--locations-to-xref-items loc)))
+    (funcall callback (mapcar #'source-peek--xref--get-location xrefs))))
+
 ;; Jedi backend
 
 (require 'deferred nil :noerror)
@@ -174,6 +183,7 @@
 (defvar source-peek-backends
   '((jedi-mode . source-peek-jedi-get-locations)
     (tern-mode . source-peek-tern-get-locations)
+    (lsp-mode . source-peek-lsp-get-locations)
     ((not (member (xref-find-backend) '(etags nil))) . source-peek-xref-get-locations)
     ((source-peek-use-dump-jump-p) . source-peek-dumb-jump-get-locations)))
 
